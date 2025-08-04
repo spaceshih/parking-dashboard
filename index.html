@@ -482,6 +482,107 @@
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
+        // IP白名單配置
+        const IP_WHITELIST = {
+            // 設定允許的IP地址和範圍
+            allowedIPs: [
+                // 請替換為您的實際IP地址
+                // '192.168.1.100',        // 特定IP
+                // '192.168.1.0/24',       // IP範圍 (CIDR格式)
+                // '10.0.0.0/8',           // 內網IP範圍
+                '127.0.0.1',            // 本地測試
+                'localhost'             // 本地測試
+            ],
+            // 開發模式 - 設為false啟用IP白名單
+            developmentMode: true
+        };
+
+        // IP檢查函數
+        function isIPInRange(ip, cidr) {
+            if (cidr.indexOf('/') === -1) {
+                return ip === cidr;
+            }
+            
+            const [range, bits] = cidr.split('/');
+            const mask = ~(2 ** (32 - bits) - 1);
+            
+            const ipNum = ip.split('.').reduce((num, oct) => (num << 8) + parseInt(oct, 10), 0) >>> 0;
+            const rangeNum = range.split('.').reduce((num, oct) => (num << 8) + parseInt(oct, 10), 0) >>> 0;
+            
+            return (ipNum & mask) === (rangeNum & mask);
+        }
+        
+        // 檢查訪問權限
+        async function checkAccess() {
+            // 開發模式跳過檢查
+            if (IP_WHITELIST.developmentMode) {
+                console.log('開發模式：跳過IP檢查');
+                return true;
+            }
+            
+            try {
+                // 獲取用戶IP
+                const response = await fetch('https://api.ipify.org?format=json');
+                const data = await response.json();
+                const userIP = data.ip;
+                
+                console.log('用戶IP:', userIP);
+                
+                // 檢查IP是否在白名單中
+                for (const allowedIP of IP_WHITELIST.allowedIPs) {
+                    if (isIPInRange(userIP, allowedIP)) {
+                        console.log(`IP ${userIP} 已授權訪問`);
+                        return true;
+                    }
+                }
+                
+                console.log(`IP ${userIP} 未授權訪問`);
+                return false;
+                
+            } catch (error) {
+                console.error('IP檢查失敗:', error);
+                // 網路錯誤時允許訪問（可選）
+                return true;
+            }
+        }
+        
+        // 顯示拒絕訪問頁面
+        function showAccessDenied() {
+            document.body.innerHTML = `
+                <div style="
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                    height: 100vh;
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    font-family: Arial, sans-serif;
+                    color: white;
+                    text-align: center;
+                ">
+                    <div style="
+                        background: white;
+                        color: #333;
+                        padding: 40px;
+                        border-radius: 15px;
+                        box-shadow: 0 8px 25px rgba(0,0,0,0.3);
+                        max-width: 500px;
+                    ">
+                        <h1 style="margin: 0 0 20px 0; color: #dc3545;">🚫 訪問受限</h1>
+                        <p style="margin: 0 0 15px 0; font-size: 1.1em;">
+                            很抱歉，此系統僅限授權IP地址訪問。
+                        </p>
+                        <p style="margin: 0; color: #666; font-size: 0.9em;">
+                            如需訪問權限，請聯繫系統管理員。
+                        </p>
+                        <div style="margin-top: 20px; padding: 10px; background: #f8f9fa; border-radius: 5px;">
+                            <small style="color: #666;">錯誤代碼: ACCESS_DENIED_IP</small>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+    </script>
+    <script>
         let buildingsData = [];
         let parkingData = [];
         let filteredData = [];
@@ -494,6 +595,13 @@
         // Initialize the dashboard
         async function init() {
             try {
+                // 檢查IP訪問權限
+                const hasAccess = await checkAccess();
+                if (!hasAccess) {
+                    showAccessDenied();
+                    return;
+                }
+                
                 await loadData();
                 filterValidBuildings();
                 initializeFilters();
