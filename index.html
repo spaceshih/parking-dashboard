@@ -486,15 +486,13 @@
         const IP_WHITELIST = {
             // 設定允許的IP地址和範圍
             allowedIPs: [
-                // 請替換為您的實際IP地址
-                // '192.168.1.100',        // 特定IP
-                // '192.168.1.0/24',       // IP範圍 (CIDR格式)
-                // '10.0.0.0/8',           // 內網IP範圍
+                '123.192.164.188',      // 授權IP 1
+                '123.193.254.217',      // 授權IP 2
                 '127.0.0.1',            // 本地測試
                 'localhost'             // 本地測試
             ],
             // 開發模式 - 設為false啟用IP白名單
-            developmentMode: true
+            developmentMode: false
         };
 
         // IP檢查函數
