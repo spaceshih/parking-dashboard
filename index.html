@@ -215,6 +215,104 @@
             font-size: 1.1em;
         }
 
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+        }
+
+        .modal-content {
+            background-color: white;
+            margin: 2% auto;
+            padding: 20px;
+            border-radius: 15px;
+            width: 90%;
+            max-width: 1200px;
+            max-height: 90vh;
+            overflow-y: auto;
+            position: relative;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #eee;
+        }
+
+        .modal-header h2 {
+            color: #2c3e50;
+            margin: 0;
+        }
+
+        .close {
+            color: #aaa;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+            line-height: 1;
+        }
+
+        .close:hover {
+            color: #667eea;
+        }
+
+        .modal-body {
+            display: grid;
+            gap: 30px;
+        }
+
+        .chart-section {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+        }
+
+        .chart-section h3 {
+            color: #2c3e50;
+            margin: 0 0 15px 0;
+            font-size: 1.3em;
+        }
+
+        .chart-wrapper {
+            position: relative;
+            height: 300px;
+            margin-top: 15px;
+        }
+
+        .building-info {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .info-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+        }
+
+        .info-card h4 {
+            margin: 0 0 5px 0;
+            font-size: 1.5em;
+        }
+
+        .info-card p {
+            margin: 0;
+            opacity: 0.9;
+            font-size: 0.9em;
+        }
+
         @media (max-width: 768px) {
             .filter-row {
                 flex-direction: column;
@@ -226,6 +324,15 @@
             }
             
             .parking-list {
+                grid-template-columns: 1fr;
+            }
+
+            .modal-content {
+                width: 95%;
+                margin: 5% auto;
+            }
+
+            .building-info {
                 grid-template-columns: 1fr;
             }
         }
@@ -255,8 +362,13 @@
                 </div>
                 
                 <div class="filter-group">
-                    <label for="dateFilter">日期</label>
-                    <input type="date" id="dateFilter">
+                    <label for="startDateFilter">起始日期</label>
+                    <input type="date" id="startDateFilter">
+                </div>
+                
+                <div class="filter-group">
+                    <label for="endDateFilter">結束日期</label>
+                    <input type="date" id="endDateFilter">
                 </div>
                 
                 <div class="filter-group">
@@ -337,6 +449,37 @@
         </div>
     </div>
 
+    <!-- 詳細資訊模態框 -->
+    <div id="buildingModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modalTitle">停車場詳細資訊</h2>
+                <span class="close">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div class="building-info" id="buildingInfo">
+                    <!-- 基本資訊卡片將在這裡動態生成 -->
+                </div>
+                
+                <div class="chart-section">
+                    <h3>📊 每小時停放率分析</h3>
+                    <p>顯示24小時內各時段的平均停放率</p>
+                    <div class="chart-wrapper">
+                        <canvas id="hourlyChart"></canvas>
+                    </div>
+                </div>
+                
+                <div class="chart-section">
+                    <h3>📈 每週停放率分析（星期一到五）</h3>
+                    <p>顯示工作日各天的平均停放率</p>
+                    <div class="chart-wrapper">
+                        <canvas id="weeklyChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         let buildingsData = [];
@@ -344,6 +487,9 @@
         let filteredData = [];
         let validBuildings = []; // Buildings with space_number > 0
         let chart = null;
+        let hourlyChart = null;
+        let weeklyChart = null;
+        let modal = null;
 
         // Initialize the dashboard
         async function init() {
@@ -502,6 +648,24 @@
             cityFilter.addEventListener('change', function() {
                 updateZoneFilter(this.value);
             });
+
+            // Date validation handlers
+            const startDateFilter = document.getElementById('startDateFilter');
+            const endDateFilter = document.getElementById('endDateFilter');
+            
+            startDateFilter.addEventListener('change', function() {
+                if (endDateFilter.value && this.value > endDateFilter.value) {
+                    alert('起始日期不能晚於結束日期');
+                    this.value = '';
+                }
+            });
+            
+            endDateFilter.addEventListener('change', function() {
+                if (startDateFilter.value && this.value < startDateFilter.value) {
+                    alert('結束日期不能早於起始日期');
+                    this.value = '';
+                }
+            });
         }
 
         // Update zone filter based on selected city
@@ -527,7 +691,8 @@
         function applyFilters() {
             const city = document.getElementById('cityFilter').value;
             const zone = document.getElementById('zoneFilter').value;
-            const date = document.getElementById('dateFilter').value;
+            const startDate = document.getElementById('startDateFilter').value;
+            const endDate = document.getElementById('endDateFilter').value;
             const hourStart = document.getElementById('hourStart').value;
             const hourEnd = document.getElementById('hourEnd').value;
 
@@ -547,9 +712,21 @@
             // Filter parking data
             let filteredParkingData = parkingData.filter(p => buildingIds.has(p.building_id));
 
-            // Apply date filter
-            if (date) {
-                filteredParkingData = filteredParkingData.filter(p => p.date === date);
+            // Apply date range filter
+            if (startDate || endDate) {
+                filteredParkingData = filteredParkingData.filter(p => {
+                    const parkingDate = p.date;
+                    let withinRange = true;
+                    
+                    if (startDate && parkingDate < startDate) {
+                        withinRange = false;
+                    }
+                    if (endDate && parkingDate > endDate) {
+                        withinRange = false;
+                    }
+                    
+                    return withinRange;
+                });
             }
 
             // Apply hour range filter
@@ -766,18 +943,228 @@
             });
         }
 
-        // Show building detail
+        // Show building detail in modal
         function showBuildingDetail(building, parkingData) {
-            const detail = `
-                停車場詳細資訊:
-                名稱: ${building.name}
-                地址: ${building['concat(b.city,b.zone,b.road)'] || '無地址資訊'}
-                總車位: ${building.space_number}
-                營運狀態: ${building.in_operation === '1' ? '營運中' : '停止營運'}
-                
-                歷史資料筆數: ${parkingData.length}
+            // 設定模態框標題
+            document.getElementById('modalTitle').textContent = building.name + ' - 詳細分析';
+            
+            // 生成基本資訊卡片
+            generateBuildingInfo(building, parkingData);
+            
+            // 生成每小時停放率圖表
+            generateHourlyChart(building, parkingData);
+            
+            // 生成每週停放率圖表
+            generateWeeklyChart(building, parkingData);
+            
+            // 顯示模態框
+            modal.style.display = 'block';
+        }
+
+        // 生成建物基本資訊卡片
+        function generateBuildingInfo(building, parkingData) {
+            const totalSpaces = parseInt(building.space_number || 0);
+            const avgAvailable = parkingData.length > 0 ? 
+                parkingData.reduce((sum, p) => sum + parseFloat(p.avg_available_space || 0), 0) / parkingData.length : 0;
+            const avgOccupancyRate = totalSpaces > 0 ? ((totalSpaces - avgAvailable) / totalSpaces * 100) : 0;
+            const address = building['concat(b.city,b.zone,b.road)'] || `${building.city}${building.zone}`;
+            
+            const infoHTML = `
+                <div class="info-card">
+                    <h4>${building.name}</h4>
+                    <p>停車場名稱</p>
+                </div>
+                <div class="info-card">
+                    <h4>${building.city} ${building.zone}</h4>
+                    <p>所在區域</p>
+                </div>
+                <div class="info-card">
+                    <h4>${totalSpaces}</h4>
+                    <p>總車位數</p>
+                </div>
+                <div class="info-card">
+                    <h4>${Math.round(avgAvailable)}</h4>
+                    <p>平均剩餘車位</p>
+                </div>
+                <div class="info-card">
+                    <h4>${Math.round(avgOccupancyRate)}%</h4>
+                    <p>平均停放率</p>
+                </div>
+                <div class="info-card">
+                    <h4>${building.in_operation === '1' ? '營運中' : '停止營運'}</h4>
+                    <p>營運狀態</p>
+                </div>
             `;
-            alert(detail);
+            
+            document.getElementById('buildingInfo').innerHTML = infoHTML;
+        }
+
+        // 生成每小時停放率圖表
+        function generateHourlyChart(building, parkingData) {
+            const totalSpaces = parseInt(building.space_number || 0);
+            if (totalSpaces === 0) return;
+            
+            // 按小時分組計算平均停放率
+            const hourlyData = {};
+            for (let hour = 0; hour < 24; hour++) {
+                hourlyData[hour] = [];
+            }
+            
+            parkingData.forEach(p => {
+                const hour = parseInt(p.hour);
+                const availableSpaces = parseFloat(p.avg_available_space || 0);
+                const occupancyRate = ((totalSpaces - availableSpaces) / totalSpaces * 100);
+                if (hourlyData[hour]) {
+                    hourlyData[hour].push(occupancyRate);
+                }
+            });
+            
+            // 計算每小時平均停放率
+            const hourlyRates = [];
+            const hourLabels = [];
+            for (let hour = 0; hour < 24; hour++) {
+                const rates = hourlyData[hour];
+                const avgRate = rates.length > 0 ? rates.reduce((sum, rate) => sum + rate, 0) / rates.length : 0;
+                hourlyRates.push(avgRate);
+                hourLabels.push(hour.toString().padStart(2, '0') + ':00');
+            }
+            
+            const ctx = document.getElementById('hourlyChart').getContext('2d');
+            
+            if (hourlyChart) {
+                hourlyChart.destroy();
+            }
+            
+            hourlyChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: hourLabels,
+                    datasets: [{
+                        label: '停放率 (%)',
+                        data: hourlyRates,
+                        borderColor: 'rgba(102, 126, 234, 1)',
+                        backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: '24小時停放率變化'
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100,
+                            title: {
+                                display: true,
+                                text: '停放率 (%)'
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: '時間'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // 生成每週停放率圖表（星期一到五）
+        function generateWeeklyChart(building, parkingData) {
+            const totalSpaces = parseInt(building.space_number || 0);
+            if (totalSpaces === 0) return;
+            
+            // 按星期分組計算平均停放率（1=星期一, 2=星期二, ..., 5=星期五）
+            const weeklyData = { 1: [], 2: [], 3: [], 4: [], 5: [] };
+            
+            parkingData.forEach(p => {
+                const date = new Date(p.date);
+                const dayOfWeek = date.getDay(); // 0=星期日, 1=星期一, ..., 6=星期六
+                
+                // 只計算星期一到五
+                if (dayOfWeek >= 1 && dayOfWeek <= 5) {
+                    const availableSpaces = parseFloat(p.avg_available_space || 0);
+                    const occupancyRate = ((totalSpaces - availableSpaces) / totalSpaces * 100);
+                    weeklyData[dayOfWeek].push(occupancyRate);
+                }
+            });
+            
+            // 計算每天平均停放率
+            const weeklyRates = [];
+            const weekLabels = ['星期一', '星期二', '星期三', '星期四', '星期五'];
+            
+            for (let day = 1; day <= 5; day++) {
+                const rates = weeklyData[day];
+                const avgRate = rates.length > 0 ? rates.reduce((sum, rate) => sum + rate, 0) / rates.length : 0;
+                weeklyRates.push(avgRate);
+            }
+            
+            const ctx = document.getElementById('weeklyChart').getContext('2d');
+            
+            if (weeklyChart) {
+                weeklyChart.destroy();
+            }
+            
+            weeklyChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: weekLabels,
+                    datasets: [{
+                        label: '停放率 (%)',
+                        data: weeklyRates,
+                        backgroundColor: [
+                            'rgba(255, 99, 132, 0.8)',
+                            'rgba(54, 162, 235, 0.8)',
+                            'rgba(255, 205, 86, 0.8)',
+                            'rgba(75, 192, 192, 0.8)',
+                            'rgba(153, 102, 255, 0.8)'
+                        ],
+                        borderColor: [
+                            'rgba(255, 99, 132, 1)',
+                            'rgba(54, 162, 235, 1)',
+                            'rgba(255, 205, 86, 1)',
+                            'rgba(75, 192, 192, 1)',
+                            'rgba(153, 102, 255, 1)'
+                        ],
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: '工作日停放率比較'
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100,
+                            title: {
+                                display: true,
+                                text: '停放率 (%)'
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: '星期'
+                            }
+                        }
+                    }
+                }
+            });
         }
 
         // Update occupancy chart
@@ -871,7 +1258,8 @@
         function clearFilters() {
             document.getElementById('cityFilter').value = '';
             document.getElementById('zoneFilter').value = '';
-            document.getElementById('dateFilter').value = '';
+            document.getElementById('startDateFilter').value = '';
+            document.getElementById('endDateFilter').value = '';
             document.getElementById('hourStart').value = '';
             document.getElementById('hourEnd').value = '';
             
@@ -893,7 +1281,14 @@
             document.getElementById('buildingListContainer').style.display = 'block';
             document.getElementById('loadingMessage').style.display = 'none';
             
-            displayBuildingsTable(validBuildings);
+            // For showing all buildings, we need to add zeroRemainingPercentage = 0 since no parking data is filtered
+            const buildingsWithZeroPercentage = validBuildings.map(building => ({
+                ...building,
+                avgRemaining: 0,
+                zeroRemainingPercentage: 0
+            }));
+            
+            displayFullBuildingsList(buildingsWithZeroPercentage);
             updateSummaryForBuildings(validBuildings);
         }
 
@@ -929,9 +1324,18 @@
                     const avgRemaining = buildingParking.length > 0 ? 
                         buildingParking.reduce((sum, p) => sum + parseFloat(p.avg_available_space || 0), 0) / buildingParking.length : 0;
                     
+                    // Calculate percentage of time slots with 0 remaining spaces
+                    const totalTimeSlots = buildingParking.length;
+                    const zeroRemainingSlots = buildingParking.filter(p => {
+                        const availableSpaces = parseFloat(p.avg_available_space || 0);
+                        return availableSpaces === 0;
+                    }).length;
+                    const zeroRemainingPercentage = totalTimeSlots > 0 ? (zeroRemainingSlots / totalTimeSlots * 100) : 0;
+                    
                     fullBuildings.push({
                         ...building,
-                        avgRemaining: avgRemaining
+                        avgRemaining: avgRemaining,
+                        zeroRemainingPercentage: zeroRemainingPercentage
                     });
                 }
             });
@@ -958,6 +1362,7 @@
                                 <th style="border: 1px solid #dee2e6; padding: 12px; text-align: left;">地址</th>
                                 <th style="border: 1px solid #dee2e6; padding: 12px; text-align: right;">總車格數</th>
                                 <th style="border: 1px solid #dee2e6; padding: 12px; text-align: right;">平均剩餘車格數</th>
+                                <th style="border: 1px solid #dee2e6; padding: 12px; text-align: right;">剩餘車格=0的佔比</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -967,6 +1372,7 @@
                 const address = building['concat(b.city,b.zone,b.road)'] || `${building.city}${building.zone}`;
                 const region = `${building.city} ${building.zone}`;
                 
+                const zeroPercentage = building.zeroRemainingPercentage || 0;
                 listHTML += `
                     <tr style="border-bottom: 1px solid #dee2e6;">
                         <td style="border: 1px solid #dee2e6; padding: 12px;">${building.name}</td>
@@ -974,6 +1380,7 @@
                         <td style="border: 1px solid #dee2e6; padding: 12px; font-size: 0.9em;">${address}</td>
                         <td style="border: 1px solid #dee2e6; padding: 12px; text-align: right;">${building.space_number}</td>
                         <td style="border: 1px solid #dee2e6; padding: 12px; text-align: right;">${Math.round(building.avgRemaining)}</td>
+                        <td style="border: 1px solid #dee2e6; padding: 12px; text-align: right; font-weight: bold; color: ${zeroPercentage >= 80 ? '#dc3545' : zeroPercentage >= 50 ? '#fd7e14' : '#28a745'};">${Math.round(zeroPercentage)}%</td>
                     </tr>
                 `;
             });
@@ -1003,8 +1410,29 @@
             document.getElementById('occupancyRate').textContent = cities + ' 城市';
         }
 
+        // Initialize modal functionality
+        function initModal() {
+            modal = document.getElementById('buildingModal');
+            const closeBtn = document.getElementsByClassName('close')[0];
+            
+            // 點擊 X 關閉模態框
+            closeBtn.onclick = function() {
+                modal.style.display = 'none';
+            };
+            
+            // 點擊模態框外部關閉
+            window.onclick = function(event) {
+                if (event.target === modal) {
+                    modal.style.display = 'none';
+                }
+            };
+        }
+
         // Initialize when page loads
-        document.addEventListener('DOMContentLoaded', init);
+        document.addEventListener('DOMContentLoaded', function() {
+            init();
+            initModal();
+        });
     </script>
 </body>
 </html>
