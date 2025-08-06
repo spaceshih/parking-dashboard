@@ -1,0 +1,768 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>停車場地圖視覺化系統</title>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
+    <!-- Leaflet Draw CSS -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" />
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #f5f5f5;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            text-align: center;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .header h1 {
+            font-size: 2em;
+            margin-bottom: 10px;
+        }
+
+        .controls {
+            background: white;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            align-items: center;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            min-width: 150px;
+        }
+
+        .control-group label {
+            font-weight: bold;
+            margin-bottom: 5px;
+            color: #555;
+        }
+
+        select, input {
+            padding: 8px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+
+        select:focus, input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+            transition: transform 0.2s ease;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+
+        .btn.secondary {
+            background: #6c757d;
+        }
+
+        .btn.danger {
+            background: #dc3545;
+        }
+
+        .map-container {
+            position: relative;
+            height: 70vh;
+            min-height: 500px;
+        }
+
+        #map {
+            height: 100%;
+            width: 100%;
+        }
+
+        .legend {
+            background: white;
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 1000;
+            min-width: 200px;
+        }
+
+        .legend h3 {
+            margin-bottom: 10px;
+            color: #333;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            margin-right: 10px;
+            border: 2px solid #333;
+        }
+
+        .info-panel {
+            background: white;
+            padding: 20px;
+            margin-top: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+        }
+
+        .stat-card h3 {
+            font-size: 2em;
+            margin-bottom: 5px;
+        }
+
+        .analysis-results {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 15px;
+            display: none;
+        }
+
+        .analysis-results h4 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .price-comparison {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-top: 15px;
+        }
+
+        .price-box {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+            border: 2px solid #ddd;
+        }
+
+        .price-box.uspace {
+            border-color: #667eea;
+        }
+
+        .price-box.external {
+            border-color: #28a745;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+        }
+
+        @media (max-width: 768px) {
+            .controls {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            
+            .control-group {
+                min-width: 100%;
+            }
+            
+            .legend {
+                position: relative;
+                top: auto;
+                right: auto;
+                margin-bottom: 10px;
+            }
+            
+            .map-container {
+                height: 50vh;
+            }
+        }
+
+        /* 自定義標記樣式 */
+        .custom-marker {
+            border-radius: 50%;
+            border: 3px solid white;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+            width: 20px;
+            height: 20px;
+        }
+
+        .marker-uspace {
+            background-color: #667eea;
+        }
+
+        .marker-external {
+            background-color: #28a745;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🚗 停車場地圖視覺化系統</h1>
+        <p>USpace停車場 vs 外部停車場比較分析</p>
+    </div>
+
+    <div class="controls">
+        <div class="control-group">
+            <label for="cityFilter">城市篩選</label>
+            <select id="cityFilter">
+                <option value="">所有城市</option>
+            </select>
+        </div>
+        
+        <div class="control-group">
+            <label for="districtFilter">區域篩選</label>
+            <select id="districtFilter">
+                <option value="">所有區域</option>
+            </select>
+        </div>
+        
+        <div class="control-group">
+            <label for="sourceFilter">資料來源</label>
+            <select id="sourceFilter">
+                <option value="">全部顯示</option>
+                <option value="uspace">僅USpace</option>
+                <option value="external">僅外部停車場</option>
+            </select>
+        </div>
+        
+        <div class="control-group">
+            <label for="priceRange">價格範圍</label>
+            <select id="priceRange">
+                <option value="">所有價格</option>
+                <option value="0-50">$0-50/小時</option>
+                <option value="50-100">$50-100/小時</option>
+                <option value="100-200">$100-200/小時</option>
+                <option value="200+">$200+/小時</option>
+            </select>
+        </div>
+        
+        <div class="control-group">
+            <label>&nbsp;</label>
+            <button class="btn" onclick="applyFilters()">套用篩選</button>
+        </div>
+        
+        <div class="control-group">
+            <label>&nbsp;</label>
+            <button class="btn secondary" onclick="resetFilters()">重設篩選</button>
+        </div>
+        
+        <div class="control-group">
+            <label>&nbsp;</label>
+            <button class="btn" onclick="toggleDrawMode()">圈選分析</button>
+        </div>
+        
+        <div class="control-group">
+            <label>&nbsp;</label>
+            <button class="btn danger" onclick="clearSelection()">清除圈選</button>
+        </div>
+    </div>
+
+    <div class="map-container">
+        <div class="legend">
+            <h3>圖例</h3>
+            <div class="legend-item">
+                <div class="legend-color" style="background-color: #667eea;"></div>
+                <span>USpace停車場</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background-color: #28a745;"></div>
+                <span>外部停車場</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background-color: #ffc107; border-color: #333;"></div>
+                <span>圈選範圍</span>
+            </div>
+        </div>
+        <div id="map"></div>
+    </div>
+
+    <div class="info-panel">
+        <div class="stats-grid">
+            <div class="stat-card">
+                <h3 id="totalCount">-</h3>
+                <p>總停車場數</p>
+            </div>
+            <div class="stat-card">
+                <h3 id="uspaceCount">-</h3>
+                <p>USpace停車場</p>
+            </div>
+            <div class="stat-card">
+                <h3 id="externalCount">-</h3>
+                <p>外部停車場</p>
+            </div>
+            <div class="stat-card">
+                <h3 id="totalSpaces">-</h3>
+                <p>總車位數</p>
+            </div>
+        </div>
+
+        <div class="analysis-results" id="analysisResults">
+            <h4>圈選範圍分析結果</h4>
+            <div id="selectionStats"></div>
+            <div class="price-comparison">
+                <div class="price-box uspace">
+                    <h4>USpace平均價格</h4>
+                    <p>日間：<span id="uspaceAvgDay">-</span> 元/小時</p>
+                    <p>夜間：<span id="uspaceAvgNight">-</span> 元/小時</p>
+                </div>
+                <div class="price-box external">
+                    <h4>外部停車場平均價格</h4>
+                    <p>日間：<span id="externalAvgDay">-</span> 元/小時</p>
+                    <p>夜間：<span id="externalAvgNight">-</span> 元/小時</p>
+                    <p>月租：<span id="externalAvgMonthly">-</span> 元/月</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 載入中提示 -->
+    <div id="loading" class="loading">
+        載入停車場資料中...
+    </div>
+
+    <!-- JavaScript Libraries -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
+
+    <script>
+        // 全域變數
+        let map;
+        let parkingData = null;
+        let filteredData = [];
+        let markerGroup;
+        let drawControl;
+        let drawnItems;
+        let isDrawMode = false;
+
+        // 初始化地圖
+        function initMap() {
+            // 建立地圖 (台北市中心)
+            map = L.map('map').setView([25.0330, 121.5654], 11);
+
+            // 新增地圖圖層
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors'
+            }).addTo(map);
+
+            // 初始化標記群組
+            markerGroup = L.layerGroup().addTo(map);
+
+            // 初始化繪圖功能
+            drawnItems = new L.FeatureGroup();
+            map.addLayer(drawnItems);
+
+            drawControl = new L.Control.Draw({
+                draw: {
+                    polyline: false,
+                    polygon: true,
+                    circle: true,
+                    rectangle: true,
+                    marker: false,
+                    circlemarker: false
+                },
+                edit: false
+            });
+
+            // 繪圖事件
+            map.on(L.Draw.Event.CREATED, function(e) {
+                const layer = e.layer;
+                drawnItems.addLayer(layer);
+                analyzeSelection(layer);
+            });
+        }
+
+        // 載入停車場資料
+        async function loadParkingData() {
+            try {
+                console.log('開始載入停車場資料...');
+                const response = await fetch('parking_data.json');
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const text = await response.text();
+                console.log('JSON 文字長度:', text.length);
+                
+                parkingData = JSON.parse(text);
+                console.log('解析後的資料結構:', Object.keys(parkingData));
+                console.log('統計資訊:', parkingData.statistics);
+                
+                if (!parkingData.combined || parkingData.combined.length === 0) {
+                    throw new Error('沒有找到合併的停車場資料');
+                }
+                
+                filteredData = parkingData.combined;
+                console.log('設定篩選資料，筆數:', filteredData.length);
+                
+                initializeFilters();
+                displayMarkers();
+                updateStatistics();
+                
+                document.getElementById('loading').style.display = 'none';
+                
+                console.log('資料載入完成！');
+            } catch (error) {
+                console.error('載入資料時發生錯誤:', error);
+                document.getElementById('loading').innerHTML = 
+                    `<p style="color: red;">載入資料失敗: ${error.message}<br>請確認 parking_data.json 檔案存在且格式正確</p>`;
+            }
+        }
+
+        // 初始化篩選器選項
+        function initializeFilters() {
+            if (!parkingData || !parkingData.combined) {
+                console.error('停車場資料未正確載入');
+                return;
+            }
+
+            console.log('初始化篩選器，總資料筆數:', parkingData.combined.length);
+
+            // 城市篩選
+            const cities = [...new Set(parkingData.combined.map(p => p.city))].filter(city => city).sort();
+            console.log('找到的城市:', cities);
+            
+            const cityFilter = document.getElementById('cityFilter');
+            
+            // 清空現有選項（保留預設選項）
+            cityFilter.innerHTML = '<option value="">所有城市</option>';
+            
+            cities.forEach(city => {
+                const option = document.createElement('option');
+                option.value = city;
+                option.textContent = city;
+                cityFilter.appendChild(option);
+            });
+
+            console.log('城市篩選器已初始化，選項數量:', cityFilter.options.length);
+
+            // 城市變更事件
+            cityFilter.addEventListener('change', function() {
+                console.log('城市篩選變更:', this.value);
+                updateDistrictFilter(this.value);
+            });
+        }
+
+        // 更新區域篩選器
+        function updateDistrictFilter(selectedCity) {
+            const districtFilter = document.getElementById('districtFilter');
+            districtFilter.innerHTML = '<option value="">所有區域</option>';
+
+            if (selectedCity && parkingData) {
+                const districts = [...new Set(
+                    parkingData.combined
+                        .filter(p => p.city === selectedCity)
+                        .map(p => p.district)
+                        .filter(d => d)
+                )].sort();
+
+                districts.forEach(district => {
+                    const option = document.createElement('option');
+                    option.value = district;
+                    option.textContent = district;
+                    districtFilter.appendChild(option);
+                });
+            }
+        }
+
+        // 套用篩選條件
+        function applyFilters() {
+            if (!parkingData) return;
+
+            const city = document.getElementById('cityFilter').value;
+            const district = document.getElementById('districtFilter').value;
+            const source = document.getElementById('sourceFilter').value;
+            const priceRange = document.getElementById('priceRange').value;
+
+            filteredData = parkingData.combined.filter(parking => {
+                // 城市篩選
+                if (city && parking.city !== city) return false;
+                
+                // 區域篩選
+                if (district && parking.district !== district) return false;
+                
+                // 資料來源篩選
+                if (source && parking.source !== source) return false;
+                
+                // 價格範圍篩選
+                if (priceRange) {
+                    const dayRate = parking.day_rate || 0;
+                    switch (priceRange) {
+                        case '0-50':
+                            if (dayRate > 50) return false;
+                            break;
+                        case '50-100':
+                            if (dayRate <= 50 || dayRate > 100) return false;
+                            break;
+                        case '100-200':
+                            if (dayRate <= 100 || dayRate > 200) return false;
+                            break;
+                        case '200+':
+                            if (dayRate <= 200) return false;
+                            break;
+                    }
+                }
+                
+                return true;
+            });
+
+            displayMarkers();
+            updateStatistics();
+        }
+
+        // 重設篩選條件
+        function resetFilters() {
+            document.getElementById('cityFilter').value = '';
+            document.getElementById('districtFilter').value = '';
+            document.getElementById('sourceFilter').value = '';
+            document.getElementById('priceRange').value = '';
+            
+            updateDistrictFilter('');
+            
+            if (parkingData) {
+                filteredData = parkingData.combined;
+                displayMarkers();
+                updateStatistics();
+            }
+        }
+
+        // 顯示標記
+        function displayMarkers() {
+            // 清除現有標記
+            markerGroup.clearLayers();
+
+            filteredData.forEach(parking => {
+                const lat = parseFloat(parking.lat);
+                const lon = parseFloat(parking.lon);
+                
+                if (isNaN(lat) || isNaN(lon)) return;
+
+                // 根據資料來源設定標記顏色
+                const color = parking.source === 'uspace' ? '#667eea' : '#28a745';
+                
+                // 建立自定義標記
+                const marker = L.circleMarker([lat, lon], {
+                    radius: 8,
+                    fillColor: color,
+                    color: 'white',
+                    weight: 2,
+                    opacity: 1,
+                    fillOpacity: 0.8
+                });
+
+                // 建立彈出視窗內容
+                const popupContent = createPopupContent(parking);
+                marker.bindPopup(popupContent);
+
+                markerGroup.addLayer(marker);
+            });
+
+            // 調整地圖視野
+            if (filteredData.length > 0) {
+                const group = new L.featureGroup(markerGroup.getLayers());
+                if (group.getBounds().isValid()) {
+                    map.fitBounds(group.getBounds(), { padding: [20, 20] });
+                }
+            }
+        }
+
+        // 建立彈出視窗內容
+        function createPopupContent(parking) {
+            const dayRate = parking.day_rate || 0;
+            const nightRate = parking.night_rate || 0;
+            const monthlyRate = parking.monthly_rate || 0;
+            const spaceNumber = parking.space_number || 0;
+
+            return `
+                <div style="min-width: 250px;">
+                    <h4 style="margin: 0 0 10px 0; color: ${parking.source === 'uspace' ? '#667eea' : '#28a745'};">
+                        ${parking.name}
+                    </h4>
+                    <p><strong>類型:</strong> ${parking.source === 'uspace' ? 'USpace停車場' : '外部停車場'}</p>
+                    <p><strong>地址:</strong> ${parking.city}${parking.district} ${parking.address}</p>
+                    <p><strong>車位數:</strong> ${spaceNumber > 0 ? spaceNumber : '未提供'}</p>
+                    <hr style="margin: 10px 0;">
+                    <p><strong>收費資訊:</strong></p>
+                    <p>日間費率: ${dayRate > 0 ? dayRate + ' 元/小時' : '未提供'}</p>
+                    <p>夜間費率: ${nightRate > 0 ? nightRate + ' 元/小時' : '未提供'}</p>
+                    ${monthlyRate > 0 ? `<p>月租費: ${monthlyRate} 元/月</p>` : ''}
+                    ${parking.building_type ? `<p>建物類型: ${parking.building_type}</p>` : ''}
+                </div>
+            `;
+        }
+
+        // 更新統計資訊
+        function updateStatistics() {
+            const totalCount = filteredData.length;
+            const uspaceCount = filteredData.filter(p => p.source === 'uspace').length;
+            const externalCount = filteredData.filter(p => p.source === 'external').length;
+            const totalSpaces = filteredData.reduce((sum, p) => sum + (p.space_number || 0), 0);
+
+            document.getElementById('totalCount').textContent = totalCount.toLocaleString();
+            document.getElementById('uspaceCount').textContent = uspaceCount.toLocaleString();
+            document.getElementById('externalCount').textContent = externalCount.toLocaleString();
+            document.getElementById('totalSpaces').textContent = totalSpaces.toLocaleString();
+        }
+
+        // 切換繪圖模式
+        function toggleDrawMode() {
+            if (isDrawMode) {
+                map.removeControl(drawControl);
+                isDrawMode = false;
+                document.querySelector('button[onclick="toggleDrawMode()"]').textContent = '圈選分析';
+            } else {
+                map.addControl(drawControl);
+                isDrawMode = true;
+                document.querySelector('button[onclick="toggleDrawMode()"]').textContent = '結束圈選';
+            }
+        }
+
+        // 清除圈選範圍
+        function clearSelection() {
+            drawnItems.clearLayers();
+            document.getElementById('analysisResults').style.display = 'none';
+        }
+
+        // 分析圈選範圍
+        function analyzeSelection(layer) {
+            const selectedParking = [];
+            
+            // 檢查每個停車場是否在圈選範圍內
+            filteredData.forEach(parking => {
+                const lat = parseFloat(parking.lat);
+                const lon = parseFloat(parking.lon);
+                
+                if (isNaN(lat) || isNaN(lon)) return;
+                
+                const point = L.latLng(lat, lon);
+                
+                // 檢查點是否在圖形內
+                let isInside = false;
+                if (layer instanceof L.Circle) {
+                    isInside = layer.getLatLng().distanceTo(point) <= layer.getRadius();
+                } else if (layer instanceof L.Polygon || layer instanceof L.Rectangle) {
+                    isInside = isPointInPolygon(point, layer.getLatLngs()[0]);
+                }
+                
+                if (isInside) {
+                    selectedParking.push(parking);
+                }
+            });
+
+            displayAnalysisResults(selectedParking);
+        }
+
+        // 檢查點是否在多邊形內
+        function isPointInPolygon(point, polygon) {
+            const x = point.lat;
+            const y = point.lng;
+            let inside = false;
+
+            for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+                const xi = polygon[i].lat;
+                const yi = polygon[i].lng;
+                const xj = polygon[j].lat;
+                const yj = polygon[j].lng;
+
+                if (((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi)) {
+                    inside = !inside;
+                }
+            }
+
+            return inside;
+        }
+
+        // 顯示分析結果
+        function displayAnalysisResults(selectedParking) {
+            const uspaceSelected = selectedParking.filter(p => p.source === 'uspace');
+            const externalSelected = selectedParking.filter(p => p.source === 'external');
+
+            // 計算USpace平均價格
+            const uspaceAvgDay = uspaceSelected.length > 0 ?
+                uspaceSelected.reduce((sum, p) => sum + (p.day_rate || 0), 0) / uspaceSelected.length : 0;
+            const uspaceAvgNight = uspaceSelected.length > 0 ?
+                uspaceSelected.reduce((sum, p) => sum + (p.night_rate || 0), 0) / uspaceSelected.length : 0;
+
+            // 計算外部停車場平均價格
+            const externalAvgDay = externalSelected.length > 0 ?
+                externalSelected.reduce((sum, p) => sum + (p.day_rate || 0), 0) / externalSelected.length : 0;
+            const externalAvgNight = externalSelected.length > 0 ?
+                externalSelected.reduce((sum, p) => sum + (p.night_rate || 0), 0) / externalSelected.length : 0;
+            const externalAvgMonthly = externalSelected.length > 0 ?
+                externalSelected.reduce((sum, p) => sum + (p.monthly_rate || 0), 0) / externalSelected.length : 0;
+
+            // 更新顯示
+            document.getElementById('selectionStats').innerHTML = `
+                <p><strong>圈選範圍內停車場統計：</strong></p>
+                <p>總計：${selectedParking.length} 個停車場</p>
+                <p>USpace：${uspaceSelected.length} 個</p>
+                <p>外部停車場：${externalSelected.length} 個</p>
+            `;
+
+            document.getElementById('uspaceAvgDay').textContent = uspaceAvgDay > 0 ? Math.round(uspaceAvgDay) : '-';
+            document.getElementById('uspaceAvgNight').textContent = uspaceAvgNight > 0 ? Math.round(uspaceAvgNight) : '-';
+            document.getElementById('externalAvgDay').textContent = externalAvgDay > 0 ? Math.round(externalAvgDay) : '-';
+            document.getElementById('externalAvgNight').textContent = externalAvgNight > 0 ? Math.round(externalAvgNight) : '-';
+            document.getElementById('externalAvgMonthly').textContent = externalAvgMonthly > 0 ? Math.round(externalAvgMonthly) : '-';
+
+            document.getElementById('analysisResults').style.display = 'block';
+        }
+
+        // 頁面載入完成後初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            initMap();
+            loadParkingData();
+        });
+    </script>
+</body>
+</html>

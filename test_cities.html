@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>測試城市篩選</title>
+</head>
+<body>
+    <h1>城市篩選測試</h1>
+    <select id="cityFilter">
+        <option value="">所有城市</option>
+    </select>
+    
+    <div id="debug"></div>
+
+    <script>
+        // 測試載入資料
+        async function testLoadData() {
+            try {
+                console.log('測試載入資料...');
+                
+                // 直接讀取檔案內容
+                const response = await fetch('parking_data.json');
+                console.log('Response status:', response.status);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const parkingData = await response.json();
+                console.log('載入的資料:', parkingData);
+                console.log('combined 資料長度:', parkingData.combined?.length);
+                
+                if (parkingData.combined && parkingData.combined.length > 0) {
+                    // 取得城市列表
+                    const cities = [...new Set(parkingData.combined.map(p => p.city))].filter(city => city).sort();
+                    console.log('找到的城市:', cities);
+                    
+                    // 填充選項
+                    const cityFilter = document.getElementById('cityFilter');
+                    cities.forEach(city => {
+                        const option = document.createElement('option');
+                        option.value = city;
+                        option.textContent = city;
+                        cityFilter.appendChild(option);
+                    });
+                    
+                    document.getElementById('debug').innerHTML = 
+                        `<p>成功載入 ${parkingData.combined.length} 筆資料</p>
+                         <p>找到 ${cities.length} 個城市</p>
+                         <p>城市列表: ${cities.join(', ')}</p>`;
+                } else {
+                    throw new Error('沒有找到合併的資料');
+                }
+                
+            } catch (error) {
+                console.error('錯誤:', error);
+                document.getElementById('debug').innerHTML = 
+                    `<p style="color: red;">錯誤: ${error.message}</p>`;
+            }
+        }
+
+        // 頁面載入後執行測試
+        document.addEventListener('DOMContentLoaded', testLoadData);
+    </script>
+</body>
+</html>
