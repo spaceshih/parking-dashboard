@@ -1487,6 +1487,7 @@
             const buildingsWithZeroPercentage = filteredBuildings.map(building => ({
                 ...building,
                 avgRemaining: 0,
+                avgParked: 0,
                 zeroRemainingPercentage: 0
             }));
             
@@ -1534,9 +1535,13 @@
                     }).length;
                     const zeroRemainingPercentage = totalTimeSlots > 0 ? (zeroRemainingSlots / totalTimeSlots * 100) : 0;
                     
+                    // Calculate average parked vehicles (總車位 - 平均剩餘車位)
+                    const avgParked = Math.max(0, totalSpaces - avgRemaining);
+                    
                     fullBuildings.push({
                         ...building,
                         avgRemaining: avgRemaining,
+                        avgParked: avgParked,
                         zeroRemainingPercentage: zeroRemainingPercentage
                     });
                 }
@@ -1575,6 +1580,9 @@
                                 <th class="sortable-header" data-sort="avgRemaining" style="border: 1px solid #dee2e6; padding: 12px; text-align: right;">
                                     平均剩餘車格數<span class="sort-indicator ${getSortIndicatorClass('avgRemaining')}"></span>
                                 </th>
+                                <th class="sortable-header" data-sort="avgParked" style="border: 1px solid #dee2e6; padding: 12px; text-align: right;">
+                                    平均停放車輛數<span class="sort-indicator ${getSortIndicatorClass('avgParked')}"></span>
+                                </th>
                                 <th class="sortable-header" data-sort="zeroRemainingPercentage" style="border: 1px solid #dee2e6; padding: 12px; text-align: right;">
                                     剩餘車格=0的佔比<span class="sort-indicator ${getSortIndicatorClass('zeroRemainingPercentage')}"></span>
                                 </th>
@@ -1595,6 +1603,7 @@
                         <td style="border: 1px solid #dee2e6; padding: 12px; font-size: 0.9em;">${address}</td>
                         <td style="border: 1px solid #dee2e6; padding: 12px; text-align: right;">${building.space_number}</td>
                         <td style="border: 1px solid #dee2e6; padding: 12px; text-align: right;">${Math.round(building.avgRemaining)}</td>
+                        <td style="border: 1px solid #dee2e6; padding: 12px; text-align: right; color: #0066cc;">${Math.round(building.avgParked || 0)}</td>
                         <td style="border: 1px solid #dee2e6; padding: 12px; text-align: right; font-weight: bold; color: ${zeroPercentage >= 80 ? '#dc3545' : zeroPercentage >= 50 ? '#fd7e14' : '#28a745'};">${Math.round(zeroPercentage)}%</td>
                     </tr>
                 `;
@@ -1659,6 +1668,10 @@
                     case 'avgRemaining':
                         valueA = a.avgRemaining || 0;
                         valueB = b.avgRemaining || 0;
+                        break;
+                    case 'avgParked':
+                        valueA = a.avgParked || 0;
+                        valueB = b.avgParked || 0;
                         break;
                     case 'zeroRemainingPercentage':
                         valueA = a.zeroRemainingPercentage || 0;
