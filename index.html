@@ -589,51 +589,6 @@
             `;
         }
 
-        // 檔案加密/解密功能
-        const ENCRYPTION_KEY = 'PARKING_DASHBOARD_2024_SECURE_KEY_V1';
-        
-        // Simple XOR encryption/decryption
-        function encryptDecrypt(text, key) {
-            let result = '';
-            for (let i = 0; i < text.length; i++) {
-                const keyChar = key.charCodeAt(i % key.length);
-                const textChar = text.charCodeAt(i);
-                result += String.fromCharCode(textChar ^ keyChar);
-            }
-            return result;
-        }
-        
-        // Base64 encode/decode for safe transport
-        function encryptData(plaintext) {
-            const encrypted = encryptDecrypt(plaintext, ENCRYPTION_KEY);
-            return btoa(encrypted);
-        }
-        
-        function decryptData(ciphertext) {
-            try {
-                const encrypted = atob(ciphertext);
-                return encryptDecrypt(encrypted, ENCRYPTION_KEY);
-            } catch (error) {
-                console.error('Decryption failed:', error);
-                throw new Error('檔案解密失敗，可能檔案已損壞');
-            }
-        }
-        
-        // 載入加密檔案
-        async function loadEncryptedFile(filename) {
-            try {
-                const response = await fetch(filename);
-                if (!response.ok) {
-                    throw new Error(`Failed to fetch ${filename}: ${response.status}`);
-                }
-                const encryptedData = await response.text();
-                const decryptedData = decryptData(encryptedData);
-                return decryptedData;
-            } catch (error) {
-                console.error(`Error loading encrypted file ${filename}:`, error);
-                throw error;
-            }
-        }
     </script>
     <script>
         let buildingsData = [];
@@ -697,9 +652,13 @@
             try {
                 console.log('Starting to load data...');
                 
-                // Load buildings data (encrypted)
-                console.log('Fetching encrypted buildings data...');
-                const buildingsText = await loadEncryptedFile('建物.encrypted');
+                // Load buildings data
+                console.log('Fetching buildings data...');
+                const buildingsResponse = await fetch('建物.csv');
+                if (!buildingsResponse.ok) {
+                    throw new Error(`Failed to fetch buildings data: ${buildingsResponse.status}`);
+                }
+                const buildingsText = await buildingsResponse.text();
                 console.log('Buildings CSV text length:', buildingsText.length);
                 buildingsData = parseCSV(buildingsText);
                 
