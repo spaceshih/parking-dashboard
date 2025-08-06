@@ -387,6 +387,15 @@
             </div>
             
             <div class="filter-row">
+                <div class="filter-group">
+                    <label for="thirdpartyFilter">設備廠商</label>
+                    <select id="thirdpartyFilter">
+                        <option value="">全部場域</option>
+                        <option value="has_thirdparty">有設備廠商</option>
+                        <option value="no_thirdparty">無設備廠商</option>
+                    </select>
+                </div>
+                
                 <div class="filter-group" style="justify-content: flex-end;">
                     <label>&nbsp;</label>
                     <button class="btn" onclick="applyFilters()">分析停滿率</button>
@@ -579,6 +588,52 @@
                 </div>
             `;
         }
+
+        // 檔案加密/解密功能
+        const ENCRYPTION_KEY = 'PARKING_DASHBOARD_2024_SECURE_KEY_V1';
+        
+        // Simple XOR encryption/decryption
+        function encryptDecrypt(text, key) {
+            let result = '';
+            for (let i = 0; i < text.length; i++) {
+                const keyChar = key.charCodeAt(i % key.length);
+                const textChar = text.charCodeAt(i);
+                result += String.fromCharCode(textChar ^ keyChar);
+            }
+            return result;
+        }
+        
+        // Base64 encode/decode for safe transport
+        function encryptData(plaintext) {
+            const encrypted = encryptDecrypt(plaintext, ENCRYPTION_KEY);
+            return btoa(encrypted);
+        }
+        
+        function decryptData(ciphertext) {
+            try {
+                const encrypted = atob(ciphertext);
+                return encryptDecrypt(encrypted, ENCRYPTION_KEY);
+            } catch (error) {
+                console.error('Decryption failed:', error);
+                throw new Error('檔案解密失敗，可能檔案已損壞');
+            }
+        }
+        
+        // 載入加密檔案
+        async function loadEncryptedFile(filename) {
+            try {
+                const response = await fetch(filename);
+                if (!response.ok) {
+                    throw new Error(`Failed to fetch ${filename}: ${response.status}`);
+                }
+                const encryptedData = await response.text();
+                const decryptedData = decryptData(encryptedData);
+                return decryptedData;
+            } catch (error) {
+                console.error(`Error loading encrypted file ${filename}:`, error);
+                throw error;
+            }
+        }
     </script>
     <script>
         let buildingsData = [];
@@ -610,14 +665,31 @@
             }
         }
 
-        // Filter buildings with space_number > 0
+        // Filter buildings with space_number > 0 and have shared parking data
         function filterValidBuildings() {
-            validBuildings = buildingsData.filter(b => {
+            // First filter by space_number > 0
+            let filteredBuildings = buildingsData.filter(b => {
                 const spaceNumber = parseInt(b.space_number || 0);
                 return spaceNumber > 0;
             });
-            console.log('Valid buildings (space > 0):', validBuildings.length);
-            console.log('Total buildings:', buildingsData.length);
+            
+            // Then filter out buildings that have only zero remaining spaces (no sharing)
+            const buildingsWithNonZeroData = new Set();
+            
+            // Group parking data by building and check for non-zero values
+            parkingData.forEach(p => {
+                const remaining = parseFloat(p.avg_available_space || 0);
+                if (remaining > 0) {
+                    buildingsWithNonZeroData.add(p.building_id);
+                }
+            });
+            
+            // Only include buildings that have at least one non-zero remaining space record
+            validBuildings = filteredBuildings.filter(b => buildingsWithNonZeroData.has(b.id));
+            
+            console.log('Buildings with space > 0:', filteredBuildings.length);
+            console.log('Buildings with sharing data (non-zero remaining):', validBuildings.length);
+            console.log('Filtered out (no sharing):', filteredBuildings.length - validBuildings.length);
         }
 
         // Load CSV data
@@ -625,13 +697,9 @@
             try {
                 console.log('Starting to load data...');
                 
-                // Load buildings data
-                console.log('Fetching buildings data...');
-                const buildingsResponse = await fetch('建物.csv');
-                if (!buildingsResponse.ok) {
-                    throw new Error(`Failed to fetch buildings data: ${buildingsResponse.status}`);
-                }
-                const buildingsText = await buildingsResponse.text();
+                // Load buildings data (encrypted)
+                console.log('Fetching encrypted buildings data...');
+                const buildingsText = await loadEncryptedFile('建物.encrypted');
                 console.log('Buildings CSV text length:', buildingsText.length);
                 buildingsData = parseCSV(buildingsText);
                 
@@ -801,6 +869,7 @@
             const endDate = document.getElementById('endDateFilter').value;
             const hourStart = document.getElementById('hourStart').value;
             const hourEnd = document.getElementById('hourEnd').value;
+            const thirdpartyFilter = document.getElementById('thirdpartyFilter').value;
 
             // Filter valid buildings
             let filteredBuildings = validBuildings;
@@ -810,6 +879,13 @@
             }
             if (zone) {
                 filteredBuildings = filteredBuildings.filter(b => b.zone === zone);
+            }
+            
+            // Apply thirdparty filter
+            if (thirdpartyFilter === 'has_thirdparty') {
+                filteredBuildings = filteredBuildings.filter(b => b.thirdparty_name && b.thirdparty_name.trim() !== '' && b.thirdparty_name !== 'NULL');
+            } else if (thirdpartyFilter === 'no_thirdparty') {
+                filteredBuildings = filteredBuildings.filter(b => !b.thirdparty_name || b.thirdparty_name.trim() === '' || b.thirdparty_name === 'NULL');
             }
 
             // Get building IDs
@@ -1368,6 +1444,7 @@
             document.getElementById('endDateFilter').value = '';
             document.getElementById('hourStart').value = '';
             document.getElementById('hourEnd').value = '';
+            document.getElementById('thirdpartyFilter').value = '';
             
             // Update zone filter
             updateZoneFilter('');
@@ -1387,15 +1464,36 @@
             document.getElementById('buildingListContainer').style.display = 'block';
             document.getElementById('loadingMessage').style.display = 'none';
             
+            // Apply filters to buildings
+            const city = document.getElementById('cityFilter').value;
+            const zone = document.getElementById('zoneFilter').value;
+            const thirdpartyFilter = document.getElementById('thirdpartyFilter').value;
+            
+            let filteredBuildings = validBuildings;
+            
+            if (city) {
+                filteredBuildings = filteredBuildings.filter(b => b.city === city);
+            }
+            if (zone) {
+                filteredBuildings = filteredBuildings.filter(b => b.zone === zone);
+            }
+            
+            // Apply thirdparty filter
+            if (thirdpartyFilter === 'has_thirdparty') {
+                filteredBuildings = filteredBuildings.filter(b => b.thirdparty_name && b.thirdparty_name.trim() !== '' && b.thirdparty_name !== 'NULL');
+            } else if (thirdpartyFilter === 'no_thirdparty') {
+                filteredBuildings = filteredBuildings.filter(b => !b.thirdparty_name || b.thirdparty_name.trim() === '' || b.thirdparty_name === 'NULL');
+            }
+            
             // For showing all buildings, we need to add zeroRemainingPercentage = 0 since no parking data is filtered
-            const buildingsWithZeroPercentage = validBuildings.map(building => ({
+            const buildingsWithZeroPercentage = filteredBuildings.map(building => ({
                 ...building,
                 avgRemaining: 0,
                 zeroRemainingPercentage: 0
             }));
             
             displayFullBuildingsList(buildingsWithZeroPercentage);
-            updateSummaryForBuildings(validBuildings);
+            updateSummaryForBuildings(filteredBuildings);
         }
 
         // Show full parking lots list
